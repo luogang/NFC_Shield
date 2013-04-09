@@ -4,7 +4,7 @@
 // authenticateBlock, readMemoryBlock, writeMemoryBlock contributed
 // by Seeed Technology Inc (www.seeedstudio.com)
 
-#include <WProgram.h>
+#include <Arduino.h>
 #include "PN532.h"
 
 //#define PN532DEBUG 1
@@ -14,13 +14,17 @@ byte pn532response_firmwarevers[] = {0x00, 0xFF, 0x06, 0xFA, 0xD5, 0x03};
 
 #define PN532_PACKBUFFSIZ 64
 byte pn532_packetbuffer[PN532_PACKBUFFSIZ];
-
+#define PN532_CS 10
 PN532::PN532(uint8_t clk, uint8_t miso, uint8_t mosi, uint8_t ss) {
     _clk = clk;
     _miso = miso;
     _mosi = mosi;
+    #if defined(__AVR_ATmega1280__)|| defined(__AVR_ATmega2560__)
+    _ss = PN532_CS;
+    pinMode(ss, OUTPUT);
+    #else
     _ss = ss;
-
+    #endif
     pinMode(_ss, OUTPUT);
     pinMode(_clk, OUTPUT);
     pinMode(_mosi, OUTPUT);
@@ -117,172 +121,6 @@ boolean PN532::SAMConfig(void) {
     return  (pn532_packetbuffer[5] == 0x15);
 }
 
-uint32_t PN532::configurePeerAsInitiator(uint8_t baudrate /* Any number from 0-2. 0 for 106kbps or 1 for 201kbps or 2 for 424kbps */) {
-
-    pn532_packetbuffer[0] = PN532_INJUMPFORDEP;
-    pn532_packetbuffer[1] = 0x01; //Active Mode
-    pn532_packetbuffer[2] = baudrate; // Use 1 or 2. //0 i.e 106kps is not supported yet
-    pn532_packetbuffer[3] = 0x01; //Indicates Optional Payload is present
-
-    //Polling request payload
-    pn532_packetbuffer[4] = 0x00; 
-    pn532_packetbuffer[5] = 0xFF; 
-    pn532_packetbuffer[6] = 0xFF; 
-    pn532_packetbuffer[7] = 0x00; 
-    pn532_packetbuffer[8] = 0x00; 
-
-    if (! sendCommandCheckAck(pn532_packetbuffer, 9))
-        return false;
-
-    // read data packet
-    readspidata(pn532_packetbuffer, 19+6);
-
-#ifdef PN532DEBUG
-    Serial.println();
-    // check the response
-    Serial.println("PEER_INITIATOR");
-    for(uint8_t i=0;i<19+6;i++)
-    {
-        Serial.print(pn532_packetbuffer[i], HEX); Serial.print(" ");
-    }
-#endif
-
-return (pn532_packetbuffer[7] == 0x00); //No error
-
-}
-
-uint32_t PN532::initiatorTxRx(char *DataOut,char *DataIn)
-{
-    pn532_packetbuffer[0] = PN532_INDATAEXCHANGE;
-    pn532_packetbuffer[1] = 0x01; //Target 01
-
-    for(uint8_t iter=(2+0);iter<(2+16);iter++)
-    {
-        pn532_packetbuffer[iter] = DataOut[iter-2]; //pack the data to send to target
-    }
-
-    if (! sendCommandCheckAck(pn532_packetbuffer, 18))
-        return false;
-
-    // read data packet
-    readspidata(pn532_packetbuffer, 18+6);
-
-#ifdef PN532DEBUG
-    Serial.println();
-    // check the response
-    Serial.println("INITIATOR_TXRX");
-    for(uint8_t i=0;i<18+6;i++)
-    {
-        Serial.print(pn532_packetbuffer[i], HEX); Serial.print(" ");
-    }
-#endif
-
-   for(uint8_t iter=8;iter<(8+16);iter++)
-   {
-       DataIn[iter-8] = pn532_packetbuffer[iter]; //data received from target
-   }
-
-return (pn532_packetbuffer[7] == 0x00); //No error
-}
-
-uint32_t PN532::configurePeerAsTarget() {
-
-    byte pbuffer[38] =      { PN532_TGINITASTARGET, 
-                             0x00,
-                             0x08, 0x00, //SENS_RES
-                             0x12, 0x34, 0x56, //NFCID1
-                             0x40, //SEL_RES
-
-                             0x01, 0xFE, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, // POL_RES
-                             0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 
-                           
-                             0xFF, 0xFF,
-                            
-                             0xAA, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, //NFCID3t: Change this to desired value
-
-                             0x00, 0x00 //Length of general and historical bytes
-                             };
-
-    for(uint8_t iter=0;iter<38;iter++)
-    {
-        pn532_packetbuffer[iter] = pbuffer[iter];
-    }
-
-    if (! sendCommandCheckAck(pn532_packetbuffer, 38))
-        return false;
-
-    // read data packet
-    readspidata(pn532_packetbuffer, 18+6);
-
-#ifdef PN532DEBUG
-    Serial.println();
-    // check some basic stuff
-
-    Serial.println("PEER_TARGET");
-    for(uint8_t i=0;i<18+6;i++)
-    {
-        Serial.print(pn532_packetbuffer[i], HEX); Serial.println(" ");
-    }
-#endif
-
-return (pn532_packetbuffer[23] == 0x00); //No error as it received all response
-}
-
-uint32_t PN532::targetTxRx(char *DataOut,char *DataIn)
-{
-///////////////////////////////////// Receiving from Initiator ///////////////////////////
-    pn532_packetbuffer[0] = PN532_TGGETDATA;
-    if (! sendCommandCheckAck(pn532_packetbuffer, 1))
-        return false;
-
-    // read data packet
-    readspidata(pn532_packetbuffer, 18+6);
-
-#ifdef PN532DEBUG
-    Serial.println();
-    // check the response
-    Serial.println("TARGET_RX");
-    for(uint8_t i=0;i<18+6;i++)
-    {
-        Serial.print(pn532_packetbuffer[i], HEX); Serial.print(" ");
-    }
-#endif
-
-   for(uint8_t iter=8;iter<(8+16);iter++)
-   {
-      DataIn[iter-8] = pn532_packetbuffer[iter]; //data received from initiator
-   }
-
-///////////////////////////////////// Sending to Initiator ///////////////////////////
-if(pn532_packetbuffer[7] == 0x00) //If no errors in receiving, send data.
-{
-    pn532_packetbuffer[0] = PN532_TGSETDATA;
-    for(uint8_t iter=(1+0);iter<(1+16);iter++)
-    {
-        pn532_packetbuffer[iter] = DataOut[iter-1]; //pack the data to send to target
-    }
-
-    if (! sendCommandCheckAck(pn532_packetbuffer, 17))
-        return false;
-
-    // read data packet
-    readspidata(pn532_packetbuffer, 2+6);
-
-#ifdef PN532DEBUG
-    Serial.println();
-    // check the response
-    Serial.println("TARGET_TX");
-    for(uint8_t i=0;i<2+6;i++)
-    {
-        Serial.print(pn532_packetbuffer[i], HEX); Serial.print(" ");
-    }
-#endif
-
-return (pn532_packetbuffer[7] == 0x00); //No error
-}
-
-}
-
 uint32_t PN532::authenticateBlock(uint8_t cardnumber /*1 or 2*/,uint32_t cid /*Card NUID*/, uint8_t blockaddress /*0 to 63*/,uint8_t authtype/*Either KEY_A or KEY_B */, uint8_t * keys) {
     pn532_packetbuffer[0] = PN532_INDATAEXCHANGE;
     pn532_packetbuffer[1] = cardnumber;  // either card 1 or 2 (tested for card 1)
@@ -368,7 +206,6 @@ uint32_t PN532::readMemoryBlock(uint8_t cardnumber /*1 or 2*/,uint8_t blockaddre
   	return true; //read successful
     }
     else
-
     {
   	return false;
     }

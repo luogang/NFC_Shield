@@ -5,7 +5,7 @@
 // by Seeed Technology Inc (www.seeedstudio.com)
 
 
-#include <WProgram.h>
+#include <Arduino.h>
 
 #define PN532_PREAMBLE 0x00
 #define PN532_STARTCODE1 0x00
@@ -19,11 +19,6 @@
 #define PN532_SAMCONFIGURATION  0x14
 #define PN532_INLISTPASSIVETARGET 0x4A
 #define PN532_INDATAEXCHANGE 0x40
-#define PN532_INJUMPFORDEP 0x56
-#define PN532_TGINITASTARGET 0x8C
-#define PN532_TGGETDATA 0x86
-#define PN532_TGSETDATA 0x8E
-
 #define PN532_MIFARE_READ 0x30
 #define PN532_MIFARE_WRITE 0xA0
 
@@ -62,14 +57,9 @@ public:
     uint32_t readMemoryBlock(uint8_t cardnumber /*1 or 2*/,uint8_t blockaddress /*0 to 63*/, uint8_t * block);
     uint32_t writeMemoryBlock(uint8_t cardnumber /*1 or 2*/,uint8_t blockaddress /*0 to 63*/, uint8_t * block);
 
-    uint32_t configurePeerAsInitiator(uint8_t baudrate /* Any number from 0-2. 0 for 106kbps or 1 for 201kbps or 2 for 424kbps */); //106kps is not supported
-    uint32_t configurePeerAsTarget(); 
-    uint32_t initiatorTxRx(char* DataOut,char* DataIn);
-    uint32_t targetTxRx(char* DataOut,char* DataIn);
-
     boolean sendCommandCheckAck(uint8_t *cmd, uint8_t cmdlen, uint16_t timeout = 1000);
 
-   
+    //
 
 private:
     uint8_t _ss, _clk, _mosi, _miso;
